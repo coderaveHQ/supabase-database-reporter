@@ -1,0 +1,5 @@
+./database/example_001.test.sql .. ok
+./database/example_002.test.sql .. ok
+All tests successful.
+Files=2, Tests=3,  0 wallclock secs ( 0.02 usr  0.00 sys +  0.01 cusr  0.00 csys =  0.03 CPU)
+Result: PASS

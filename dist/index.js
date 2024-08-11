@@ -24920,6 +24920,54 @@ exports["default"] = _default;
 
 /***/ }),
 
+/***/ 7378:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.LocalFileProvider = void 0;
+const fs = __importStar(__nccwpck_require__(7147));
+class LocalFileProvider {
+    fileName;
+    constructor(fileName) {
+        this.fileName = fileName;
+    }
+    async read() {
+        const content = await fs.promises.readFile(this.fileName, {
+            encoding: 'utf8'
+        });
+        return content;
+    }
+}
+exports.LocalFileProvider = LocalFileProvider;
+
+
+/***/ }),
+
 /***/ 399:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -24951,52 +24999,290 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.run = run;
 const core = __importStar(__nccwpck_require__(2186));
-const wait_1 = __nccwpck_require__(5259);
-/**
- * The main function for the action.
- * @returns {Promise<void>} Resolves when the action is complete.
- */
+const parser_1 = __nccwpck_require__(8412);
+const local_file_provider_1 = __nccwpck_require__(7378);
+const reporter_1 = __nccwpck_require__(5021);
 async function run() {
     try {
-        const ms = core.getInput('milliseconds');
-        // Debug logs are only output if the `ACTIONS_STEP_DEBUG` secret is true
-        core.debug(`Waiting ${ms} milliseconds ...`);
-        // Log the current timestamp, wait, then log the new timestamp
-        core.debug(new Date().toTimeString());
-        await (0, wait_1.wait)(parseInt(ms, 10));
-        core.debug(new Date().toTimeString());
-        // Set outputs for other workflow steps to use
-        core.setOutput('time', new Date().toTimeString());
+        const reporter = new SupabaseReporter();
+        await reporter.run();
     }
     catch (error) {
-        // Fail the workflow run if an error occurs
         if (error instanceof Error)
-            core.setFailed(error.message);
+            core.setFailed(error);
+        core.setFailed(JSON.stringify(error));
+    }
+}
+class SupabaseReporter {
+    fileName = core.getInput('file-name', { required: true });
+    failOnError = core.getInput('fail-on-error', { required: true }) === 'true';
+    failOnEmpty = core.getInput('fail-on-empty', { required: true }) === 'true';
+    constructor() {
+        if (this.fileName === '' || !this.fileName.endsWith('.txt')) {
+            core.setFailed(`Input parameter 'file-name' needs to be a .txt`);
+        }
+    }
+    async run() {
+        const fileContent = await this.readFile(this.fileName);
+        const testResult = this.parseFileContent(fileContent);
+        await this.createReport(testResult);
+        const conclusion = testResult.overallSuccess ? 'success' : 'failure';
+        core.setOutput('conclusion', conclusion);
+        core.setOutput('files', testResult.fileCount);
+        core.setOutput('tests', testResult.testCount);
+        core.setOutput('passed', testResult.successCount);
+        core.setOutput('failed', testResult.failCount);
+        if (!testResult.overallSuccess && this.failOnError) {
+            core.setFailed(`Failed tests were found and 'fail-on-error' option is set to ${this.failOnError}`);
+            return;
+        }
+        if (testResult.testCount === 0 && this.failOnEmpty) {
+            core.setFailed(`No tests were found and 'fail-on-empty' option is set to ${this.failOnEmpty}`);
+            return;
+        }
+    }
+    async readFile(fileName) {
+        core.info(`Reading contents of file ${fileName}`);
+        const inputProvider = new local_file_provider_1.LocalFileProvider(this.fileName);
+        const fileContent = await inputProvider.read();
+        return fileContent;
+    }
+    parseFileContent(fileContent) {
+        core.info('Parsing file content');
+        const parser = new parser_1.Parser();
+        const result = parser.parse(fileContent);
+        return result;
+    }
+    async createReport(testResult) {
+        core.info('Creating report');
+        const reporter = new reporter_1.Reporter();
+        const reportContent = reporter.create(this.fileName, testResult);
+        await core.summary.addRaw(reportContent).write();
     }
 }
 
 
 /***/ }),
 
-/***/ 5259:
+/***/ 8412:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.Parser = exports.FailedTest = exports.TestFile = exports.TestResult = void 0;
+const error_utils_1 = __nccwpck_require__(2877);
+class TestResult {
+    overallSuccess;
+    fileCount;
+    testCount;
+    failCount;
+    successCount;
+    testFiles;
+    constructor(overallSuccess, fileCount, testCount, failCount, successCount, testFiles) {
+        this.overallSuccess = overallSuccess;
+        this.fileCount = fileCount;
+        this.testCount = testCount;
+        this.failCount = failCount;
+        this.successCount = successCount;
+        this.testFiles = testFiles;
+    }
+}
+exports.TestResult = TestResult;
+class TestFile {
+    success;
+    fileName;
+    failCount;
+    failedTests;
+    constructor(success, fileName, failCount, failedTests = []) {
+        this.success = success;
+        this.fileName = fileName;
+        this.failCount = failCount;
+        this.failedTests = failedTests;
+    }
+}
+exports.TestFile = TestFile;
+class FailedTest {
+    index;
+    description;
+    constructor(index, description) {
+        this.index = index;
+        this.description = description;
+    }
+}
+exports.FailedTest = FailedTest;
+class Parser {
+    parse(content) {
+        return this.getTestResult(content);
+    }
+    getTestResult(content) {
+        const lines = content.split('\n');
+        let overallSuccess = true;
+        let fileCount = 0;
+        let testCount = 0;
+        let failCount = 0;
+        const testFiles = [];
+        let testFileName = '';
+        let fileFailCount = 0;
+        let failedTests = [];
+        for (const line of lines) {
+            if (line.startsWith('./')) {
+                testFileName = '';
+                fileFailCount = 0;
+                failedTests = [];
+                const lineParts = line.split(' ');
+                testFileName = lineParts[0];
+                const passed = lineParts[lineParts.length - 1] === 'ok';
+                if (passed)
+                    testFiles.push(new TestFile(true, testFileName, 0, []));
+            }
+            else if (line.startsWith('# Failed')) {
+                const numberMatch = line.match(/test (\d+):/);
+                const testIndex = parseInt((0, error_utils_1.ensureNonNull)(numberMatch, 'Failed to find test index')[1], 10);
+                const descriptionMatch = line.match(/"([^"]+)"/);
+                const testDescription = (0, error_utils_1.ensureNonNull)(descriptionMatch, 'Failed to find test description')[1];
+                failCount++;
+                fileFailCount++;
+                failedTests.push(new FailedTest(testIndex, testDescription));
+            }
+            else if (line.startsWith('# Looks')) {
+                testFiles.push(new TestFile(false, testFileName, fileFailCount, failedTests));
+            }
+            else if (line.startsWith('Files')) {
+                const filesMatch = line.match(/Files=(\d+)/);
+                fileCount = parseInt((0, error_utils_1.ensureNonNull)(filesMatch, 'Failed to find file count')[1], 10);
+                const testsMatch = line.match(/Tests=(\d+)/);
+                testCount = parseInt((0, error_utils_1.ensureNonNull)(testsMatch, 'Failed to find test count')[1], 10);
+            }
+            else if (line.startsWith('Result')) {
+                overallSuccess = !line.includes('FAIL');
+            }
+        }
+        const successCount = testCount - failCount;
+        return new TestResult(overallSuccess, fileCount, testCount, failCount, successCount, testFiles);
+    }
+}
+exports.Parser = Parser;
+
+
+/***/ }),
+
+/***/ 5021:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.Reporter = void 0;
+const markdown_utils_1 = __nccwpck_require__(8148);
+class Reporter {
+    create(fileName, result) {
+        return this.getReport(fileName, result);
+    }
+    getReport(fileName, testResult) {
+        const sections = [];
+        const badge = this.getBadge(testResult.failCount);
+        sections.push(badge);
+        const icon = this.getResultIcon(testResult.overallSuccess);
+        sections.push(`## ${icon}\xa0${fileName}`);
+        const overviewLine = this.getOverviewLine(testResult.testCount, testResult.fileCount, testResult.successCount, testResult.failCount);
+        sections.push(overviewLine);
+        if (testResult.fileCount !== 0) {
+            const filesTable = this.getFilesTable(testResult.testFiles);
+            sections.push(filesTable);
+            const failingTests = testResult.testFiles
+                .filter(testFile => !testFile.success)
+                .map(testFile => this.getFailingTest(testFile))
+                .flat();
+            sections.push(...failingTests);
+        }
+        return sections.join('\n');
+    }
+    getBadge(failCount) {
+        const message = failCount > 0 ? `${failCount} failed` : 'All passed';
+        const color = failCount > 0 ? 'critical' : 'success';
+        const hint = failCount > 0 ? 'Tests failed' : 'Tests passed successfully';
+        const uri = encodeURIComponent(`tests-${message}-${color}`);
+        return `![${hint}](https://img.shields.io/badge/${uri})`;
+    }
+    getOverviewLine(testCount, fileCount, successCount, failCount) {
+        return `**${testCount}** tests were completed in **${fileCount}** files with **${successCount}** passed and **${failCount}** failed.`;
+    }
+    getFilesTable(testFiles) {
+        return (0, markdown_utils_1.table)(['Test suite', 'Passed', 'Failed'], [markdown_utils_1.Align.Left, markdown_utils_1.Align.Right, markdown_utils_1.Align.Right], ...testFiles.map(testFile => {
+            const passed = testFile.success ? markdown_utils_1.Icon.success : '';
+            const failed = !testFile.success
+                ? `${testFile.failCount} ${markdown_utils_1.Icon.fail}`
+                : '';
+            return [testFile.fileName, passed, failed];
+        }));
+    }
+    getFailingTest(failingFile) {
+        const sections = [];
+        sections.push(`### ${this.getResultIcon(false)}\xa0${failingFile.fileName}`);
+        sections.push('```');
+        for (const failingTest of failingFile.failedTests) {
+            sections.push(`Test ${failingTest.index}: ${failingTest.description}`);
+        }
+        sections.push('```');
+        return sections;
+    }
+    getResultIcon(success) {
+        return success ? markdown_utils_1.Icon.success : markdown_utils_1.Icon.fail;
+    }
+}
+exports.Reporter = Reporter;
+
+
+/***/ }),
+
+/***/ 2877:
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.wait = wait;
-/**
- * Wait for a number of milliseconds.
- * @param milliseconds The number of milliseconds to wait.
- * @returns {Promise<string>} Resolves with 'done!' after the wait is over.
- */
-async function wait(milliseconds) {
-    return new Promise(resolve => {
-        if (isNaN(milliseconds)) {
-            throw new Error('milliseconds not a number');
-        }
-        setTimeout(() => resolve('done!'), milliseconds);
-    });
+exports.ensureNonNull = ensureNonNull;
+function ensureNonNull(value, errorMessage) {
+    if (value === null || value === undefined)
+        throw new Error(errorMessage);
+    return value;
+}
+
+
+/***/ }),
+
+/***/ 8148:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.Icon = exports.Align = void 0;
+exports.table = table;
+/* eslint-disable no-shadow */
+var Align;
+(function (Align) {
+    Align["Left"] = ":---";
+    Align["Center"] = ":---:";
+    Align["Right"] = "---:";
+    Align["None"] = "---";
+})(Align || (exports.Align = Align = {}));
+/* eslint-enable no-shadow */
+exports.Icon = {
+    success: '✅',
+    fail: '❌'
+};
+function table(headers, alignments, ...rows) {
+    const headerRow = `|${headers.map(tableEscape).join('|')}|`;
+    const alignRow = `|${alignments.join('|')}|`;
+    const contentRows = rows
+        .map(row => `|${row.map(tableEscape).join('|')}|`)
+        .join('\n');
+    return [headerRow, alignRow, contentRows].join('\n');
+}
+function tableEscape(content) {
+    return content.toString().replace('|', '\\|');
 }
 
 
@@ -26896,9 +27182,6 @@ var __webpack_exports__ = {};
 var exports = __webpack_exports__;
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-/**
- * The entrypoint for the action.
- */
 const main_1 = __nccwpck_require__(399);
 // eslint-disable-next-line @typescript-eslint/no-floating-promises
 (0, main_1.run)();

@@ -1,0 +1,2 @@
+Files=0, Tests=0,  0 wallclock secs ( 0.00 usr +  0.01 sys =  0.01 CPU)
+Result: NOTESTS

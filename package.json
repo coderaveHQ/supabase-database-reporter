@@ -1,21 +1,23 @@
 {
-  "name": "typescript-action",
-  "description": "GitHub Actions TypeScript template",
-  "version": "0.0.0",
-  "author": "",
+  "name": "supabase-database-reporter",
+  "description": "Displays Supabase database test results directly in GitHub",
+  "version": "1.0.0",
+  "author": "coderaveHQ <hello@coderave.dev>",
   "private": true,
-  "homepage": "https://github.com/actions/typescript-action",
+  "homepage": "https://github.com/actions/supabase-database-reporter",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/actions/typescript-action.git"
+    "url": "git+https://github.com/coderaveHQ/supabase-database-reporter.git"
   },
   "bugs": {
-    "url": "https://github.com/actions/typescript-action/issues"
+    "url": "https://github.com/coderaveHQ/supabase-database-reporter/issues"
   },
   "keywords": [
     "actions",
     "node",
-    "setup"
+    "setup",
+    "test",
+    "supabase"
   ],
   "exports": {
     ".": "./dist/index.js"

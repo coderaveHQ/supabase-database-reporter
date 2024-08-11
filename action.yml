@@ -1,23 +1,40 @@
-name: 'The name of your action here'
-description: 'Provide a description here'
-author: 'Your name or organization here'
+name: 'Supabase Database Reporter'
+description: 'Displays Supabase database test results directly in GitHub'
 
-# Add your action's branding here. This will appear on the GitHub Marketplace.
 branding:
   icon: 'heart'
-  color: 'red'
+  color: 'green'
 
-# Define your inputs here.
 inputs:
-  milliseconds:
-    description: 'Your input description here'
+  file-name:
+    description: 'The name of the file containing the test results'
     required: true
-    default: '1000'
 
-# Define your outputs here.
+  fail-on-error:
+    description:
+      'Set this action as failed if test report contain any failed test'
+    required: false
+    default: 'true'
+
+  fail-on-empty:
+    description: 'Set this action as failed if no test results were found'
+    required: true
+    default: 'true'
+
 outputs:
-  time:
-    description: 'Your output description here'
+  conclusion:
+    description: |
+      Final conclusion of the created check run:
+        - 'success' if no failed tests was found
+        - 'failure' if any failed test was found
+  files:
+    description: Count of files tested
+  tests:
+    description: Count of tests run
+  passed:
+    description: Count of passed tests
+  failed:
+    description: Count of failed tests
 
 runs:
   using: node20
